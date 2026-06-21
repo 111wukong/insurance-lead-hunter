@@ -1,0 +1,53 @@
+# 保险商机情报系统配置文件
+
+database:
+  path: leads.db
+
+# 请求配置
+request:
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  timeout: 30
+  retry: 3
+  interval: 2  # 请求间隔(秒)
+
+# 关键词分类
+categories:
+  工程类:
+    keywords: [工程, 施工, 建筑, 工地, 建设, 装修, 改造, 道路, 桥梁, 隧道, 水利, 地质灾害]
+    priority: high
+  企业财产类:
+    keywords: [企业财产, 财产险, 财产保险, 厂房, 仓库, 设备, 固定资产]
+    priority: high
+  车辆类:
+    keywords: [车辆, 车险, 车队, 交通, 汽车, 运输, 客车, 货车, 公交车]
+    priority: high
+  责任险类:
+    keywords: [责任险, 雇主, 公众责任, 食品安全, 安全生产, 产品责任, 物业责任]
+    priority: high
+  政府项目类:
+    keywords: [政府采购, 政府购买, 财政, 公共资源, 政务]
+    priority: medium
+  农险类:
+    keywords: [农业, 种植, 养殖, 生猪, 粮食, 水稻, 油菜, 森林, 特色农业]
+    priority: high
+  健康险类:
+    keywords: [医疗, 健康, 补充医疗, 大病, 意外伤害, 城乡居民, 职工医保, 大病保险]
+    priority: high
+  其他保险:
+    keywords: [保险, 保费, 投保, 承保, 理赔, 共保, 再保险]
+    priority: low
+
+# 飞书通知
+feishu:
+  enabled: true
+  # webhook URL 从环境变量 FEISHU_WEBHOOK 读取
+  daily_report_time: "09:00"
+
+# 数据清理
+clean:
+  retention_days: 30  # 保留天数
+
+# 日志
+logging:
+  level: INFO
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
