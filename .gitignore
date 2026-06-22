@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 *.pyo
 leads.db
+leads.db-shm
+leads.db-wal
 data/
 .env
 *.egg-info/
@@ -9,3 +11,6 @@ dist/
 build/
 .venv/
 venv/
+storage/datasets/
+storage/request_queues/
+.DS_Store

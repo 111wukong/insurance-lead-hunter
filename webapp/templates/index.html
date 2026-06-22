@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>保险商机情报系统 - Insurance Lead Hunter</title>
+<style>
+:root {
+  --bg: #f0f2f5; --card: #fff; --text: #1a1a2e; --text2: #64748b;
+  --primary: #c62828; --primary-light: #ef5350; --border: #e2e8f0;
+  --gov-bg: #eff6ff; --gov-border: #3b82f6; --gov-text: #1e40af;
+  --ent-bg: #fef3c7; --ent-border: #eab308; --ent-text: #92400e;
+  --high-bg: #fee2e2; --high-text: #991b1b;
+  --med-bg: #fef3c7; --med-text: #92400e;
+  --low-bg: #f1f5f9; --low-text: #475569;
+  --shadow: 0 1px 3px rgba(0,0,0,.08); --radius: 12px;
+  --fresh: #059669; --expired: #ef4444;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); min-height:100vh; }
+.header { background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%); color:#fff; padding:16px 32px; box-shadow: 0 2px 8px rgba(198,40,40,.3); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+.header h1 { font-size:20px; font-weight:700; }
+.header .sub { font-size:12px; opacity:.85; }
+.header-right { display:flex; gap:10px; align-items:center; }
+.btn-collect { padding:8px 18px; background:#fff; color:var(--primary); border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+.btn-collect:hover { opacity:.9; }
+.btn-collect:disabled { opacity:.5; cursor:wait; }
+.container { max-width:1500px; margin:0 auto; padding:20px; }
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+.stat-card { background:var(--card); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
+.stat-card .label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+.stat-card .value { font-size:24px; font-weight:700; margin:2px 0; }
+.stat-card .sub { font-size:10px; color:var(--text2); }
+.stat-card.gov { border-left:3px solid #3b82f6; }
+.stat-card.ent { border-left:3px solid #eab308; }
+.stat-card.high-rel { border-left:3px solid var(--primary); }
+.stat-card.gov .value { color:#3b82f6; }
+.stat-card.ent .value { color:#eab308; }
+.stat-card.high-rel .value { color:var(--primary); }
+
+.filters-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+.filters-row select, .filters-row input { padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px; background:var(--card); min-width:120px; }
+.filters-row input[type=text] { flex:1; min-width:180px; }
+.filters-row .quick-stat { font-size:12px; color:var(--text2); margin-left:auto; display:flex; gap:16px; }
+.quick-stat strong { color:var(--text); }
+
+.table-wrap { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { background:#f8fafc; padding:10px 14px; text-align:left; font-weight:600; color:var(--text2); font-size:11px; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid var(--border); white-space:nowrap; }
+td { padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+tr:hover { background:#f8fafc; }
+tr.row-gov { background:#f0f7ff; }
+tr.row-ent { background:#fffdf0; }
+tr.row-expired { opacity:.5; }
+
+.badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap; }
+.badge-gov { background:var(--gov-bg); color:var(--gov-text); border:1px solid var(--gov-border); }
+.badge-ent { background:var(--ent-bg); color:var(--ent-text); border:1px solid var(--ent-border); }
+.badge-high { background:var(--high-bg); color:var(--high-text); }
+.badge-med { background:var(--med-bg); color:var(--med-text); }
+.badge-low { background:var(--low-bg); color:var(--low-text); }
+.badge-fresh { color:var(--fresh); font-weight:600; }
+.badge-expired { color:var(--expired); font-weight:600; }
+
+.lead-title { font-weight:600; max-width:350px; }
+.lead-title a { color:inherit; text-decoration:none; cursor:pointer; }
+.lead-title a:hover { color:var(--primary); }
+.lead-summary { font-size:11px; color:var(--text2); margin-top:4px; line-height:1.5; max-width:350px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.opportunity { font-size:11px; color:var(--primary); margin-top:4px; line-height:1.4; max-width:350px; }
+.lead-date { font-size:12px; color:var(--text2); white-space:nowrap; }
+
+.cat-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap; }
+.cat-badge.high { background:var(--high-bg); color:var(--high-text); }
+.cat-badge.medium { background:var(--med-bg); color:var(--med-text); }
+.cat-badge.low { background:var(--low-bg); color:var(--low-text); }
+
+.pagination { display:flex; gap:8px; align-items:center; justify-content:center; padding:16px; }
+.pagination button { padding:6px 14px; border:1px solid var(--border); border-radius:6px; background:var(--card); cursor:pointer; font-size:13px; }
+.pagination button:disabled { opacity:.4; cursor:default; }
+.pagination span { font-size:13px; color:var(--text2); }
+
+.loading { text-align:center; padding:40px; color:var(--text2); }
+.empty { text-align:center; padding:60px; color:var(--text2); }
+
+.detail-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:100; justify-content:center; align-items:center; }
+.detail-overlay.active { display:flex; }
+.detail-card { background:var(--card); border-radius:var(--radius); max-width:700px; width:90%; max-height:85vh; overflow-y:auto; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.2); position:relative; }
+.detail-card h2 { font-size:20px; margin-bottom:16px; padding-right:30px; }
+.detail-card .meta { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; font-size:13px; }
+.detail-card .section { margin-top:20px; }
+.detail-card .section h3 { font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+.detail-actions { display:flex; gap:8px; margin-top:24px; flex-wrap:wrap; }
+.detail-actions button { padding:8px 16px; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+.btn-mark { background:#f59e0b; color:#fff; }
+.btn-gray { background:#6b7280; color:#fff; }
+.btn-red { background:#ef4444; color:#fff; }
+.btn-close-x { position:absolute; top:12px; right:16px; background:none; border:none; font-size:22px; color:var(--text2); cursor:pointer; }
+.toast { position:fixed; top:20px; right:20px; padding:12px 20px; border-radius:8px; color:#fff; font-size:14px; font-weight:600; z-index:200; opacity:0; transform:translateY(-10px); transition:.3s; }
+.toast.show { opacity:1; transform:translateY(0); }
+.toast.success { background:#22c55e; }
+.toast.error { background:#ef4444; }
+
+@media (max-width:768px) {
+  .container { padding:10px; }
+  .stats-grid { grid-template-columns:repeat(2,1fr); }
+  .header { padding:12px 16px; }
+  .lead-title,.lead-summary,.opportunity { max-width:150px; }
+  .filters-row { flex-direction:column; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>🛡️ 保险商机情报系统</h1>
+    <div class="sub">巴中·平昌人保财险 · <span id="update-time"></span></div>
+  </div>
+  <div class="header-right">
+    <span id="header-stats" style="font-size:12px;opacity:.8"></span>
+    <button class="btn-collect" id="btn-collect" onclick="collectLeads()">🔄 立即采集</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">📊 总线索</div><div class="value" id="s-total">-</div></div>
+    <div class="stat-card gov"><div class="label">🏛️ 政府项目</div><div class="value" id="s-gov">-</div></div>
+    <div class="stat-card ent"><div class="label">🏢 企业项目</div><div class="value" id="s-ent">-</div></div>
+    <div class="stat-card high-rel"><div class="label">🔥 高关联度</div><div class="value" id="s-high">-</div></div>
+    <div class="stat-card"><div class="label">🆕 新线索</div><div class="value" id="s-new">-</div></div>
+    <div class="stat-card"><div class="label">👀 跟进中</div><div class="value" id="s-followed" style="color:#f59e0b">-</div></div>
+  </div>
+
+  <div class="filters-row">
+    <select id="f-project-type" onchange="loadLeads(1)"><option value="">🏛️🏢 全部类型</option><option value="政府项目">🏛️ 政府项目</option><option value="企业项目">🏢 企业项目</option></select>
+    <select id="f-relevance" onchange="loadLeads(1)"><option value="">🔥 全部关联度</option><option value="高">🔥 高关联</option><option value="中">🟡 中关联</option><option value="低">⚪ 低关联</option></select>
+    <select id="f-freshness" onchange="loadLeads(1)"><option value="all">📅 全部时间</option><option value="7d">📅 近7天</option><option value="30d">📅 近30天</option></select>
+    <select id="f-category" onchange="loadLeads(1)"><option value="">📂 全部分类</option></select>
+    <select id="f-source" onchange="loadLeads(1)"><option value="">📡 全部来源</option></select>
+    <select id="f-status" onchange="loadLeads(1)"><option value="">📌 全部状态</option><option value="new">🆕 新线索</option><option value="followed">👀 跟进中</option><option value="closed">✅ 已关闭</option></select>
+    <input type="text" id="f-search" placeholder="🔍 搜索..." onkeyup="debounceSearch()">
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30%">线索名称</th>
+          <th>类型</th>
+          <th>关联度</th>
+          <th>分类</th>
+          <th>来源</th>
+          <th>日期</th>
+          <th>商机理由</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody id="leads-tbody">
+        <tr><td colspan="8" class="loading">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<div class="detail-overlay" id="detail-overlay" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-card" id="detail-card"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let currentPage=1, totalPages=1, searchTimer;
+
+async function loadStats() {
+  const res = await fetch('/api/stats'); const d = await res.json();
+  document.getElementById('s-total').textContent = d.total;
+  document.getElementById('s-gov').textContent = d.gov_count;
+  document.getElementById('s-ent').textContent = d.ent_count;
+  document.getElementById('s-high').textContent = d.high_relevance;
+  document.getElementById('s-new').textContent = d.new;
+  document.getElementById('s-followed').textContent = d.followed;
+  document.getElementById('update-time').textContent = new Date().toLocaleString('zh-CN');
+  document.getElementById('header-stats').innerHTML = `政府${d.gov_count} · 企业${d.ent_count} · 🔥高关联${d.high_relevance}`;
+  
+  const catSel = document.getElementById('f-category'), curCat = catSel.value;
+  catSel.innerHTML = '<option value="">📂 全部分类</option>' + Object.entries(d.by_category).map(([k,v])=>`<option value="${k}">${k} (${v})</option>`).join('');
+  catSel.value = curCat;
+  const srcSel = document.getElementById('f-source'), curSrc = srcSel.value;
+  srcSel.innerHTML = '<option value="">📡 全部来源</option>' + Object.entries(d.by_source).map(([k,v])=>`<option value="${k}">${k} (${v})</option>`).join('');
+  srcSel.value = curSrc;
+}
+
+async function loadLeads(page) {
+  if(page) currentPage=page;
+  const params = new URLSearchParams({page:currentPage, per_page:30});
+  ['f-project-type','f-relevance','f-freshness','f-category','f-source','f-status','f-search'].forEach(id=>{
+    const v = document.getElementById(id).value;
+    if(v) params.set(id.replace('f-',''), v);
+  });
+  
+  const res = await fetch('/api/leads?'+params); const d = await res.json();
+  totalPages = Math.ceil(d.total/d.per_page);
+  const tbody = document.getElementById('leads-tbody');
+  
+  if(!d.leads.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty"><div style="font-size:48px;margin-bottom:12px;">📭</div><div>暂无线索</div></td></tr>';
+  } else {
+    tbody.innerHTML = d.leads.map(l=>{
+      const isGov = l.project_type==='政府项目';
+      const isHigh = l.insurance_relevance==='高';
+      const isMed = l.insurance_relevance==='中';
+      const rowClass = isGov?'row-gov':(l.project_type==='企业项目'?'row-ent':'');
+      const expiredClass = l.is_fresh===false?'row-expired':'';
+      
+      const typeBadge = isGov ? '<span class="badge badge-gov">🏛️ 政府</span>'
+        : (l.project_type==='企业项目'?'<span class="badge badge-ent">🏢 企业</span>':'<span class="badge badge-low">📋 其他</span>');
+      
+      const relBadge = isHigh ? '<span class="badge badge-high">🔥 高</span>'
+        : (isMed?'<span class="badge badge-med">🟡 中</span>':'<span class="badge badge-low">⚪ 低</span>');
+      
+      const freshBadge = l.is_false===false ? '<span class="badge badge-expired">⏰ 过期</span>' : '';
+      
+      const isCatHigh = ['工程类','企业财产类','车辆类','责任险类','农险类','健康险类'].includes(l.category);
+      const catClass = isCatHigh?'high':(l.category==='政府项目类'?'medium':'low');
+      
+      const sc = l.status==='new'?'status-new':(l.status==='followed'?'status-followed':'status-closed');
+      const st = l.status==='new'?'新线索':(l.status==='followed'?'跟进中':'已关闭');
+      
+      return `<tr class="${rowClass} ${expiredClass}">
+        <td>
+          <div class="lead-title"><a onclick="showDetail(${l.id})">${esc(l.title)}</a></div>
+          <div class="lead-summary">${esc((l.summary||'').substring(0,150))}</div>
+        </td>
+        <td>${typeBadge}</td>
+        <td>${relBadge}</td>
+        <td><span class="cat-badge ${catClass}" style="font-size:11px">${l.category||'-'}</span></td>
+        <td style="font-size:11px;color:var(--text2);max-width:100px;">${esc(l.source_name||'-')}</td>
+        <td class="lead-date">${(l.publish_date||l.created_at||'').substring(0,10)}${freshBadge}</td>
+        <td><div class="opportunity">${l.opportunity||''}</div></td>
+        <td><span class="badge ${sc==='status-new'?'badge-high':(sc==='status-followed'?'badge-med':'badge-low')}" style="font-size:10px">${st}</span></td>
+      </tr>`;
+    }).join('');
+  }
+  
+  const pag = document.getElementById('pagination');
+  pag.innerHTML = totalPages<=1 ? '' : `
+    <button onclick="loadLeads(1)" ${currentPage===1?'disabled':''}>««</button>
+    <button onclick="loadLeads(${currentPage-1})" ${currentPage===1?'disabled':''}>«</button>
+    <span>${currentPage}/${totalPages} (${d.total}条)</span>
+    <button onclick="loadLeads(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>»</button>
+    <button onclick="loadLeads(${totalPages})" ${currentPage===totalPages?'disabled':''}>»»</button>`;
+}
+
+async function showDetail(id) {
+  const res = await fetch('/api/leads/'+id); const l = await res.json();
+  const isGov = l.project_type==='政府项目';
+  const isHigh = l.insurance_relevance==='高';
+  document.getElementById('detail-card').innerHTML = `
+    <button class="btn-close-x" onclick="closeDetail()">✕</button>
+    <h2>${esc(l.title)}</h2>
+    <div class="meta">
+      <span class="badge ${isGov?'badge-gov':'badge-ent'}">${isGov?'🏛️ 政府项目':'🏢 企业项目'}</span>
+      <span class="badge ${isHigh?'badge-high':'badge-med'}">${isHigh?'🔥 高关联':'🟡 中关联'}</span>
+      <span class="badge" style="background:#dbeafe;color:#1e40af">📂 ${l.category}</span>
+      <span>📡 ${esc(l.source_name)}</span>
+      <span>📅 ${(l.publish_date||'').substring(0,10)}</span>
+      ${l.amount?`<span>💰 ¥${parseFloat(l.amount).toLocaleString()}</span>`:''}
+    </div>
+    ${l.opportunity?`<div class="section"><h3>💡 保险商机</h3><p style="font-size:14px;color:var(--primary);font-weight:600;">${esc(l.opportunity)}</p></div>`:''}
+    ${l.summary?`<div class="section"><h3>📝 摘要</h3><p style="line-height:1.8">${esc(l.summary)}</p></div>`:''}
+    ${l.url?`<div class="section"><h3>🔗 链接</h3><a href="${esc(l.url)}" target="_blank" style="color:var(--primary)">${esc(l.url)}</a></div>`:''}
+    <div class="detail-actions">
+      ${l.status!=='followed'?`<button class="btn-mark" onclick="updateStatus(${l.id},'followed')">👀 标记跟进</button>`:''}
+      ${l.status!=='closed'?`<button class="btn-gray" onclick="updateStatus(${l.id},'closed')">✅ 标记关闭</button>`:''}
+      <button class="btn-red" onclick="updateStatus(${l.id},'delete')">🗑 删除</button>
+    </div>`;
+  document.getElementById('detail-overlay').classList.add('active');
+}
+
+function closeDetail(){ document.getElementById('detail-overlay').classList.remove('active'); }
+
+async function updateStatus(id,st){
+  if(st==='delete'&&!confirm('确定删除？'))return;
+  await fetch('/api/leads/'+id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st})});
+  showToast(st==='delete'?'已删除':'已更新','success'); closeDetail(); loadLeads(); loadStats();
+}
+
+async function collectLeads(){
+  const btn=document.getElementById('btn-collect'); btn.disabled=true; btn.textContent='⏳ 采集中...';
+  try{
+    const res=await fetch('/api/collect',{method:'POST'}); const d=await res.json();
+    showToast(d.ok?'采集完成！':('失败: '+(d.error||'')),d.ok?'success':'error');
+    if(d.ok){loadStats();loadLeads(1);}
+  }catch(e){showToast('请求失败','error');}
+  btn.disabled=false; btn.textContent='🔄 立即采集';
+}
+
+function showToast(m,t){ const el=document.getElementById('toast'); el.textContent=m; el.className='toast '+t+' show'; setTimeout(()=>el.classList.remove('show'),3000); }
+function debounceSearch(){ clearTimeout(searchTimer); searchTimer=setTimeout(()=>loadLeads(1),400); }
+function esc(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+loadStats(); loadLeads();
+</script>
+</body>
+</html>

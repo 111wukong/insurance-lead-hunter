@@ -32,9 +32,9 @@ class SichuanProcureSource(BaseSource):
         for list_url in urls_to_try:
             try:
                 logger.info(f"[{self.name}] 正在请求: {list_url}")
-                resp = self.session.get(list_url, timeout=30)
-                resp.encoding = resp.apparent_encoding or 'utf-8'
-                soup = BeautifulSoup(resp.text, 'lxml')
+                soup = self.get(list_url, timeout=30)
+                if not soup:
+                    continue
 
                 items = self._extract_items(soup, base_url)
                 for item in items:
