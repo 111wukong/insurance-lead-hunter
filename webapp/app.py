@@ -4,9 +4,9 @@
 新增: 政府/企业分类、保险关联度、时效过滤、商机理由
 """
 
-import sqlite3, os, sys, json, subprocess
+import sqlite3, os, sys, json, subprocess, secrets, functools
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, abort
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(PROJECT_DIR, 'leads.db')
@@ -17,6 +17,27 @@ from analyzer import (
 )
 
 app = Flask(__name__, template_folder='templates')
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
+
+# API authentication via token (set via environment variable)
+API_TOKEN = os.environ.get('LEAD_HUNTER_API_TOKEN', '')
+
+ALLOWED_STATUSES = {'new', 'followed', 'closed'}
+MAX_PER_PAGE = 100
+
+
+def require_auth(f):
+    """Require API token authentication for state-changing endpoints."""
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if not API_TOKEN:
+            # If no token configured, allow access (local dev mode)
+            return f(*args, **kwargs)
+        token = request.headers.get('X-API-Token', '') or request.args.get('token', '')
+        if not secrets.compare_digest(token, API_TOKEN):
+            return jsonify({'error': 'unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 def get_db():
     db = sqlite3.connect(DB_PATH)
@@ -88,8 +109,11 @@ def api_leads():
     project_type = request.args.get('project_type', '')  # 政府项目/企业项目
     relevance = request.args.get('relevance', '')  # 高/中/低
     freshness = request.args.get('freshness', '')  # 7d/30d/all
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 30))
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = min(MAX_PER_PAGE, max(1, int(request.args.get('per_page', 30))))
+    except (ValueError, TypeError):
+        page, per_page = 1, 30
 
     where = ['1=1']
     params = []
@@ -135,35 +159,56 @@ def api_lead_detail(lead_id):
     return jsonify({'error': 'not found'}), 404
 
 @app.route('/api/leads/<int:lead_id>/status', methods=['POST'])
+@require_auth
 def api_update_status(lead_id):
     data = request.get_json()
-    new_status = data.get('status', 'followed')
-    db = get_db()
+    if not data:
+        return jsonify({'error': 'invalid request body'}), 400
+    new_status = data.get('status', '')
     if new_status == 'delete':
+        db = get_db()
         db.execute("DELETE FROM leads WHERE id=?", (lead_id,))
-    else:
-        db.execute("UPDATE leads SET status=? WHERE id=?", (new_status, lead_id))
+        db.commit()
+        db.close()
+        return jsonify({'ok': True})
+    if new_status not in ALLOWED_STATUSES:
+        return jsonify({'error': f'invalid status, must be one of: {sorted(ALLOWED_STATUSES)}'}), 400
+    db = get_db()
+    db.execute("UPDATE leads SET status=? WHERE id=?", (new_status, lead_id))
     db.commit()
     db.close()
     return jsonify({'ok': True})
 
 @app.route('/api/collect', methods=['POST'])
+@require_auth
 def api_collect():
     try:
         collector = os.path.join(PROJECT_DIR, 'sources', 'playwright_collector.py')
+        if not os.path.isfile(collector):
+            return jsonify({'ok': False, 'error': 'collector script not found'}), 500
         result = subprocess.run(
             [sys.executable, collector],
             cwd=PROJECT_DIR, capture_output=True, text=True, timeout=180
         )
-        return jsonify({'ok': True, 'stdout': result.stdout[-3000:], 'stderr': result.stderr[-500:]})
+        # Only return a success summary, not raw stdout/stderr (avoid info disclosure)
+        if result.returncode == 0:
+            return jsonify({'ok': True, 'message': '采集完成'})
+        else:
+            return jsonify({'ok': False, 'error': '采集脚本执行失败'})
     except subprocess.TimeoutExpired:
         return jsonify({'ok': False, 'error': '采集超时'})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)})
+    except Exception:
+        return jsonify({'ok': False, 'error': '采集过程中发生错误'})
 
 if __name__ == '__main__':
     print("🛡️ 保险商机情报系统 Web v2")
-    print(f"📍 http://localhost:5200")
+    print(f"📍 http://127.0.0.1:5200")
     print(f"📂 {DB_PATH}")
     print(f"✨ 政府/企业分类 | 保险关联度 | 时效过滤 | 商机理由")
-    app.run(host='0.0.0.0', port=5200, debug=False)
+    if API_TOKEN:
+        print("🔒 API token authentication enabled")
+    else:
+        print("⚠️  No LEAD_HUNTER_API_TOKEN set — running without auth (dev mode)")
+    # Bind to localhost by default; set FLASK_HOST=0.0.0.0 to expose externally
+    host = os.environ.get('FLASK_HOST', '127.0.0.1')
+    app.run(host=host, port=5200, debug=False)

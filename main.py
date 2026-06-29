@@ -131,6 +131,9 @@ def cmd_clean(args):
 
     engine = Engine(config)
     days = args.days or config.get('clean', {}).get('retention_days', 30)
+    if not isinstance(days, int) or days < 1:
+        print("错误: --days 必须为正整数")
+        sys.exit(1)
     engine.db.clean_old_data(days)
     print(f"\n已清理 {days} 天前的数据")
 

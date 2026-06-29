@@ -186,10 +186,13 @@ class Database:
 
     def clean_old_data(self, retention_days: int = 30):
         """清理旧数据"""
+        if not isinstance(retention_days, int) or retention_days < 1:
+            raise ValueError("retention_days must be a positive integer")
         conn = self._get_conn()
         cursor = conn.cursor()
         cursor.execute(
-            f"DELETE FROM leads WHERE created_at < datetime('now', '-{retention_days} days')"
+            "DELETE FROM leads WHERE created_at < datetime('now', '-' || ? || ' days')",
+            (retention_days,)
         )
         deleted = cursor.rowcount
         conn.commit()
