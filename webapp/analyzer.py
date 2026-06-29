@@ -78,7 +78,7 @@ def is_fresh(date_str: str, max_days: int = 30) -> Tuple[bool, Optional[datetime
         try:
             d = datetime.strptime(date_str.strip(), fmt)
             return (datetime.now() - d).days <= max_days, d
-        except:
+        except (ValueError, TypeError):
             pass
     
     # Try regex extraction
@@ -87,7 +87,7 @@ def is_fresh(date_str: str, max_days: int = 30) -> Tuple[bool, Optional[datetime
         try:
             d = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
             return (datetime.now() - d).days <= max_days, d
-        except:
+        except (ValueError, TypeError):
             pass
     
     return True, None
@@ -107,7 +107,7 @@ def analyze_lead(title: str, summary: str = '', date: str = '',
             dl = datetime.strptime(deadline.strip(), '%Y-%m-%d')
             deadline_days = (dl - datetime.now()).days
             deadline_fresh = deadline_days >= 0
-        except:
+        except (ValueError, TypeError):
             pass
     
     return {

@@ -1,7 +1,7 @@
 import os
 import pytest
 from unittest.mock import patch, MagicMock
-from notify.feishu import FeishuNotifier
+from notify.feishu import FeishuNotifier, NotificationError
 
 
 class TestFeishuNotifier:
@@ -75,21 +75,25 @@ class TestFeishuNotifier:
     def test_send_daily_report_http_error(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 500
+        mock_resp.text = 'Internal Server Error'
         mock_post.return_value = mock_resp
 
         config = {'feishu': {'enabled': True, 'webhook_url': 'https://feishu.test/hook'}}
         with patch.dict(os.environ, {}, clear=True):
             notifier = FeishuNotifier(config)
 
-        notifier.send_daily_report([], {})  # should not raise
+        with pytest.raises(NotificationError, match='HTTP'):
+            notifier.send_daily_report([], {})
 
-    @patch('notify.feishu.requests.post', side_effect=Exception('network error'))
+    @patch('notify.feishu.requests.post',
+           side_effect=__import__('requests').ConnectionError('network error'))
     def test_send_daily_report_exception(self, mock_post):
         config = {'feishu': {'enabled': True, 'webhook_url': 'https://feishu.test/hook'}}
         with patch.dict(os.environ, {}, clear=True):
             notifier = FeishuNotifier(config)
 
-        notifier.send_daily_report([], {})  # should not raise
+        with pytest.raises(NotificationError, match='网络错误'):
+            notifier.send_daily_report([], {})
 
     def test_build_card_structure(self):
         config = {'feishu': {'enabled': True, 'webhook_url': 'https://feishu.test/hook'}}

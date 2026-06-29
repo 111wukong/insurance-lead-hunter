@@ -9,7 +9,7 @@ from sources.sichuan_procure import SichuanProcureSource
 from core.dedup import Deduplicator
 from core.classifier import Classifier
 from storage.db import Database
-from notify.feishu import FeishuNotifier
+from notify.feishu import FeishuNotifier, NotificationError
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +34,15 @@ class Engine:
         ]
 
     def run_all(self, dry_run: bool = False) -> Dict:
-        """运行所有数据源采集"""
+        """运行所有数据源采集。返回统计信息，包含错误详情。"""
         all_leads = []
         stats = {
             'total_fetched': 0,
             'new_leads': 0,
             'by_source': {},
             'by_category': {},
+            'errors': [],
+            'notification_error': None,
         }
 
         for source in self.sources:
@@ -73,11 +75,20 @@ class Engine:
 
                 if not dry_run and new_count > 0:
                     leads_to_save = [l for l in leads if self.dedup.is_new(l['url'])]
-                    self.db.insert_leads(leads_to_save)
+                    insert_result = self.db.insert_leads(leads_to_save)
+                    if insert_result['failed'] > 0:
+                        error_msg = (
+                            f"[{source_name}] 部分线索入库失败: "
+                            f"{insert_result['failed']}/{insert_result['failed'] + insert_result['success']}"
+                        )
+                        stats['errors'].append(error_msg)
+                        logger.warning(error_msg)
 
             except Exception as e:
-                logger.error(f"[{source_name}] 采集异常: {e}", exc_info=True)
+                error_msg = f"[{source_name}] 采集异常: {e}"
+                logger.error(error_msg, exc_info=True)
                 stats['by_source'][source_name] = f"ERROR: {e}"
+                stats['errors'].append(error_msg)
 
             time.sleep(self.config.get('request', {}).get('interval', 1))
 
@@ -88,22 +99,33 @@ class Engine:
         return stats
 
     def _send_notification(self, leads: List[Dict], stats: Dict):
-        """发送飞书通知"""
+        """发送飞书通知，失败信息记录到 stats"""
+        if not self.config.get('feishu', {}).get('enabled', False):
+            return
         try:
-            if self.config.get('feishu', {}).get('enabled', False):
-                self.notifier.send_daily_report(leads, stats)
-                logger.info("飞书通知已发送")
+            self.notifier.send_daily_report(leads, stats)
+            logger.info("飞书通知已发送")
+        except NotificationError as e:
+            error_msg = f"飞书通知发送失败: {e}"
+            logger.error(error_msg)
+            stats['notification_error'] = str(e)
+            stats['errors'].append(error_msg)
         except Exception as e:
-            logger.warning(f"飞书通知发送失败: {e}")
+            error_msg = f"飞书通知发送未知错误: {e}"
+            logger.error(error_msg, exc_info=True)
+            stats['notification_error'] = str(e)
+            stats['errors'].append(error_msg)
 
     def generate_report(self) -> Dict:
-        """用已有数据生成日报（不采集）"""
+        """用已有数据生成日报（不采集）。返回含错误详情的统计。"""
         leads = self.db.get_new_leads(limit=100)
         stats = {
             'total_fetched': len(leads),
             'new_leads': len(leads),
             'by_source': {},
             'by_category': {},
+            'errors': [],
+            'notification_error': None,
         }
         for lead in leads:
             src = lead.get('source_name', 'unknown')

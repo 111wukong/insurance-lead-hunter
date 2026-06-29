@@ -8,6 +8,11 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 
 
+class NotificationError(Exception):
+    """飞书通知发送失败时抛出"""
+    pass
+
+
 class FeishuNotifier:
     """飞书 Webhook 通知"""
 
@@ -19,11 +24,11 @@ class FeishuNotifier:
         self.webhook_url = webhook
         self.enabled = config.get('feishu', {}).get('enabled', False) and bool(self.webhook_url)
 
-    def send_daily_report(self, leads: List[Dict], stats: Dict = None):
-        """发送日报"""
+    def send_daily_report(self, leads: List[Dict], stats: Dict = None) -> bool:
+        """发送日报。返回 True 表示成功，失败时抛出 NotificationError。"""
         if not self.enabled:
             logger.info("飞书通知未启用或无 webhook URL")
-            return
+            return False
 
         card = self._build_card(leads, stats)
         try:
@@ -33,16 +38,22 @@ class FeishuNotifier:
                 headers={'Content-Type': 'application/json'},
                 timeout=10,
             )
-            if resp.status_code == 200:
-                resp_data = resp.json()
-                if resp_data.get('code') == 0:
-                    logger.info("飞书消息发送成功")
-                else:
-                    logger.warning(f"飞书消息发送失败: {resp_data}")
-            else:
-                logger.warning(f"飞书 HTTP 错误: {resp.status_code}")
-        except Exception as e:
-            logger.error(f"飞书消息发送异常: {e}")
+        except requests.RequestException as e:
+            raise NotificationError(f"飞书消息发送异常 (网络错误): {e}") from e
+
+        if resp.status_code != 200:
+            raise NotificationError(
+                f"飞书 HTTP 错误: status={resp.status_code}, body={resp.text[:200]}"
+            )
+
+        resp_data = resp.json()
+        if resp_data.get('code') != 0:
+            raise NotificationError(
+                f"飞书 API 返回错误: {resp_data}"
+            )
+
+        logger.info("飞书消息发送成功")
+        return True
 
     def _build_card(self, leads: List[Dict], stats: Dict = None) -> dict:
         """构建飞书卡片消息"""

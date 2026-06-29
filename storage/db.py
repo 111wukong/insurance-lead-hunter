@@ -17,8 +17,12 @@ class Database:
 
     def _get_conn(self) -> sqlite3.Connection:
         if self.conn is None:
-            self.conn = sqlite3.connect(self.db_path)
-            self.conn.row_factory = sqlite3.Row
+            try:
+                self.conn = sqlite3.connect(self.db_path)
+                self.conn.row_factory = sqlite3.Row
+            except sqlite3.OperationalError as e:
+                logger.error(f"无法连接数据库 '{self.db_path}': {e}")
+                raise
         return self.conn
 
     def init_db(self):
@@ -112,13 +116,24 @@ class Database:
         conn.commit()
         self.insert_url(url_hash, lead.get('url', ''))
 
-    def insert_leads(self, leads: List[Dict]):
-        """批量插入线索"""
+    def insert_leads(self, leads: List[Dict]) -> Dict:
+        """批量插入线索，返回成功/失败计数"""
+        results = {'success': 0, 'failed': 0, 'errors': []}
         for lead in leads:
             try:
                 self.insert_lead(lead)
+                results['success'] += 1
             except Exception as e:
-                logger.warning(f"插入线索失败 [{lead.get('title', '')[:20]}]: {e}")
+                results['failed'] += 1
+                error_msg = f"插入线索失败 [{lead.get('title', '')[:20]}]: {e}"
+                results['errors'].append(error_msg)
+                logger.warning(error_msg)
+        if results['failed'] > 0:
+            logger.error(
+                f"批量插入完成: {results['success']} 成功, "
+                f"{results['failed']} 失败"
+            )
+        return results
 
     def get_new_leads(self, limit: int = 100) -> List[Dict]:
         """获取最新线索"""

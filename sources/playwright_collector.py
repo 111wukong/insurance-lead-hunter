@@ -29,21 +29,35 @@ def classify(text):
     return '其他保险'
 
 def save_leads(leads):
-    db = sqlite3.connect(DB_PATH)
-    db.execute("PRAGMA journal_mode=WAL")
+    try:
+        db = sqlite3.connect(DB_PATH)
+        db.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.OperationalError as e:
+        print(f"  ❌ 数据库连接失败: {e}")
+        raise
+
     new = 0
+    errors = []
     for l in leads:
-        url_hash = hashlib.md5(l['url'].encode()).hexdigest()
-        if db.execute("SELECT id FROM leads WHERE url_hash=?", (url_hash,)).fetchone():
-            continue
-        cat = classify(l['title'] + l.get('summary', ''))
-        db.execute("""INSERT INTO leads 
-            (title,url,url_hash,summary,source_name,category,publish_date,amount,status,created_at)
-            VALUES (?,?,?,?,?,?,?,?,'new',datetime('now','localtime'))""",
-            (l['title'], l['url'], url_hash, l.get('summary',''),
-             l.get('source_name',''), cat, l.get('date',''), l.get('amount','')))
-        new += 1
-    db.commit(); db.close()
+        try:
+            url_hash = hashlib.md5(l['url'].encode()).hexdigest()
+            if db.execute("SELECT id FROM leads WHERE url_hash=?", (url_hash,)).fetchone():
+                continue
+            cat = classify(l['title'] + l.get('summary', ''))
+            db.execute("""INSERT INTO leads 
+                (title,url,url_hash,summary,source_name,category,publish_date,amount,status,created_at)
+                VALUES (?,?,?,?,?,?,?,?,'new',datetime('now','localtime'))""",
+                (l['title'], l['url'], url_hash, l.get('summary',''),
+                 l.get('source_name',''), cat, l.get('date',''), l.get('amount','')))
+            new += 1
+        except (sqlite3.Error, KeyError) as e:
+            errors.append(f"{l.get('title', '?')[:30]}: {e}")
+    db.commit()
+    db.close()
+    if errors:
+        print(f"  ⚠️ {len(errors)} 条入库失败:")
+        for err in errors[:5]:
+            print(f"    - {err}")
     return new
 
 async def collect_all():
@@ -61,6 +75,7 @@ async def collect_all():
         }''')
         page = await ctx.new_page()
         all_leads = []
+        collection_errors = []
         
         # ---- 巴中公共资源交易平台 ----
         print("📡 巴中公共资源交易平台...")
@@ -93,7 +108,8 @@ async def collect_all():
                         'source_name': '巴中公共资源交易平台', 'summary': '',
                     })
         except Exception as e:
-            print(f"  ⚠️ {e}")
+            collection_errors.append(f"巴中公共资源交易平台: {type(e).__name__}: {e}")
+            print(f"  ❌ 采集失败: {type(e).__name__}: {e}")
         print(f"  找到 {len(all_leads)} 条")
         
         # ---- 四川省公共资源交易信息网 ----
@@ -126,11 +142,17 @@ async def collect_all():
                     'summary': '',
                 })
         except Exception as e:
-            print(f"  ⚠️ {e}")
+            collection_errors.append(f"四川省公共资源交易信息网: {type(e).__name__}: {e}")
+            print(f"  ❌ 采集失败: {type(e).__name__}: {e}")
         print(f"  累计 {len(all_leads)} 条")
         
         await browser.close()
     
+    if collection_errors:
+        print(f"\n⚠️  {len(collection_errors)} 个数据源采集失败:")
+        for err in collection_errors:
+            print(f"  - {err}")
+
     new = save_leads(all_leads)
     print(f"\n✅ 入库 {new} 条新线索（共抓取 {len(all_leads)} 条）")
     
@@ -138,7 +160,13 @@ async def collect_all():
     total = db.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
     db.close()
     print(f"📊 数据库总计: {total} 条")
+
+    if collection_errors and not all_leads:
+        print("\n❌ 所有数据源均采集失败")
+        return -1
     return new
 
 if __name__ == '__main__':
-    asyncio.run(collect_all())
+    result = asyncio.run(collect_all())
+    if result < 0:
+        sys.exit(1)

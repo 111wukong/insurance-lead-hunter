@@ -33,7 +33,7 @@ class BaseSource(ABC):
         pass
 
     def get(self, url: str, timeout: int = None) -> BeautifulSoup:
-        """使用 curl 获取页面（绕过 geo-block）"""
+        """使用 curl 获取页面（绕过 geo-block）。失败时返回 None 并记录具体原因。"""
         t = timeout or self.timeout
         try:
             result = subprocess.run([
@@ -45,12 +45,31 @@ class BaseSource(ABC):
                 '--max-time', str(t + 5),
                 url
             ], capture_output=True, text=True, timeout=t + 10)
-            if result.returncode == 0 and len(result.stdout) > 500:
-                return BeautifulSoup(result.stdout, 'lxml')
-            logger.warning(f"[{self.name}] curl failed for {url}: code={result.returncode}, len={len(result.stdout)}")
+
+            if result.returncode != 0:
+                logger.warning(
+                    f"[{self.name}] curl 返回非零退出码 {url}: "
+                    f"code={result.returncode}, stderr={result.stderr[:200]}"
+                )
+                return None
+
+            if len(result.stdout) <= 500:
+                logger.warning(
+                    f"[{self.name}] 响应内容过短 {url}: "
+                    f"只有 {len(result.stdout)} 字节 (期望 > 500)"
+                )
+                return None
+
+            return BeautifulSoup(result.stdout, 'lxml')
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"[{self.name}] 请求超时 {url}: 超过 {t + 10} 秒")
+            return None
+        except OSError as e:
+            logger.error(f"[{self.name}] curl 命令执行失败 {url}: {e}")
             return None
         except Exception as e:
-            logger.warning(f"[{self.name}] curl error for {url}: {e}")
+            logger.error(f"[{self.name}] 未知错误 {url}: {type(e).__name__}: {e}")
             return None
 
     @staticmethod

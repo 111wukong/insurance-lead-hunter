@@ -88,8 +88,15 @@ def api_leads():
     project_type = request.args.get('project_type', '')  # 政府项目/企业项目
     relevance = request.args.get('relevance', '')  # 高/中/低
     freshness = request.args.get('freshness', '')  # 7d/30d/all
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 30))
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 30))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'page and per_page must be integers'}), 400
+    if page < 1:
+        return jsonify({'error': 'page must be >= 1'}), 400
+    if per_page < 1 or per_page > 200:
+        return jsonify({'error': 'per_page must be between 1 and 200'}), 400
 
     where = ['1=1']
     params = []
@@ -137,8 +144,18 @@ def api_lead_detail(lead_id):
 @app.route('/api/leads/<int:lead_id>/status', methods=['POST'])
 def api_update_status(lead_id):
     data = request.get_json()
-    new_status = data.get('status', 'followed')
+    if not data or 'status' not in data:
+        return jsonify({'error': 'missing status field in request body'}), 400
+    new_status = data['status']
+    valid_statuses = ('new', 'followed', 'closed', 'delete')
+    if new_status not in valid_statuses:
+        return jsonify({'error': f'invalid status, must be one of: {valid_statuses}'}), 400
     db = get_db()
+    # Verify lead exists
+    existing = db.execute("SELECT id FROM leads WHERE id=?", (lead_id,)).fetchone()
+    if not existing:
+        db.close()
+        return jsonify({'error': f'lead {lead_id} not found'}), 404
     if new_status == 'delete':
         db.execute("DELETE FROM leads WHERE id=?", (lead_id,))
     else:
@@ -151,15 +168,24 @@ def api_update_status(lead_id):
 def api_collect():
     try:
         collector = os.path.join(PROJECT_DIR, 'sources', 'playwright_collector.py')
+        if not os.path.exists(collector):
+            return jsonify({'ok': False, 'error': f'采集脚本不存在: {collector}'}), 500
         result = subprocess.run(
             [sys.executable, collector],
             cwd=PROJECT_DIR, capture_output=True, text=True, timeout=180
         )
+        if result.returncode != 0:
+            return jsonify({
+                'ok': False,
+                'error': f'采集脚本退出码: {result.returncode}',
+                'stdout': result.stdout[-3000:],
+                'stderr': result.stderr[-1000:],
+            })
         return jsonify({'ok': True, 'stdout': result.stdout[-3000:], 'stderr': result.stderr[-500:]})
     except subprocess.TimeoutExpired:
-        return jsonify({'ok': False, 'error': '采集超时'})
+        return jsonify({'ok': False, 'error': '采集超时 (超过180秒)'}), 504
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)})
+        return jsonify({'ok': False, 'error': f'采集异常: {type(e).__name__}: {e}'}), 500
 
 if __name__ == '__main__':
     print("🛡️ 保险商机情报系统 Web v2")
