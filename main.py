@@ -56,7 +56,18 @@ def cmd_run(args):
     print("\n各分类:")
     for cat, cnt in stats.get('by_category', {}).items():
         print(f"  - {cat}: {cnt}")
+
+    # 报告错误并设置退出码
+    if stats.get('errors'):
+        print("\n⚠️  采集过程中出现错误:")
+        for err in stats['errors']:
+            print(f"  - {err}")
+    if stats.get('notification_error'):
+        print(f"\n⚠️  通知发送失败: {stats['notification_error']}")
     print("=" * 50)
+
+    if stats.get('errors'):
+        sys.exit(2)
 
 
 def cmd_report(args):
@@ -79,6 +90,9 @@ def cmd_report(args):
     else:
         stats = engine.generate_report()
         print(f"\n日报已生成，共 {stats['new_leads']} 条线索")
+        if stats.get('notification_error'):
+            print(f"⚠️  通知发送失败: {stats['notification_error']}")
+            sys.exit(2)
 
 
 def cmd_stats(args):
