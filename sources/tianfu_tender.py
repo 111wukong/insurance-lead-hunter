@@ -1,7 +1,9 @@
 import logging
-import time
 from typing import List, Dict
+
 from bs4 import BeautifulSoup
+
+from core.utils import normalize_url
 from sources.base import BaseSource
 
 logger = logging.getLogger(__name__)
@@ -18,39 +20,15 @@ class TianfuTenderSource(BaseSource):
     def source_url(self) -> str:
         return "https://bazhong.tfygcgfw.com"
 
-    def fetch(self) -> List[Dict]:
-        results = []
-        base_url = "https://bazhong.tfygcgfw.com"
-
-        # 招标公告列表页
-        urls_to_try = [
+    def get_list_urls(self) -> List[str]:
+        base_url = self.source_url
+        return [
             f"{base_url}/bulletins",
             f"{base_url}/bulletins?category=ZBGG",
             f"{base_url}/",
         ]
 
-        for list_url in urls_to_try:
-            try:
-                logger.info(f"[{self.name}] 正在请求: {list_url}")
-                soup = self.get(list_url, timeout=30)
-                if not soup:
-                    continue
-
-                items = self._extract_items(soup, base_url)
-                for item in items:
-                    if self._has_insurance_keyword(item.get('title', '')):
-                        item['source_name'] = self.name
-                        results.append(item)
-
-                time.sleep(self.config.get('request', {}).get('interval', 2))
-            except Exception as e:
-                logger.warning(f"[{self.name}] 请求 {list_url} 失败: {e}")
-                continue
-
-        logger.info(f"[{self.name}] 抓取到 {len(results)} 条保险相关数据")
-        return results
-
-    def _extract_items(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+    def extract_items(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
         items = []
 
         # 策略1: 查找表格
@@ -64,9 +42,7 @@ class TianfuTenderSource(BaseSource):
                 if not link:
                     continue
                 title = link.get_text(strip=True)
-                href = link.get('href', '')
-                if href and not href.startswith('http'):
-                    href = base_url + (href if href.startswith('/') else '/' + href)
+                href = normalize_url(link.get('href', ''), base_url)
                 date = tds[-1].get_text(strip=True) if tds else ''
                 items.append(self.make_lead(
                     title=title,
@@ -85,8 +61,7 @@ class TianfuTenderSource(BaseSource):
                 continue
             href = link['href']
             if any(kw in href.lower() for kw in ['bulletindetail', 'bulletin', 'detail', 'news']):
-                if not href.startswith('http'):
-                    href = base_url + (href if href.startswith('/') else '/' + href)
+                href = normalize_url(href, base_url)
                 items.append(self.make_lead(
                     title=title,
                     url=href,
@@ -95,12 +70,3 @@ class TianfuTenderSource(BaseSource):
                 ))
 
         return items
-
-    def _has_insurance_keyword(self, text: str) -> bool:
-        keywords = [
-            '保险', '保费', '投保', '承保', '理赔', '共保', '再保险',
-            '意外伤害', '补充医疗', '大病保险', '车险', '责任险',
-            '财产险', '财产保险', '公众责任', '雇主责任', '车辆保险',
-            '建筑工程一切险', '安装工程一切险', '安全生产责任险',
-        ]
-        return any(kw in text for kw in keywords)

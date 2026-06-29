@@ -4,6 +4,8 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Optional
 
+from core.utils import url_hash
+
 logger = logging.getLogger(__name__)
 
 
@@ -87,8 +89,7 @@ class Database:
 
     def insert_lead(self, lead: Dict):
         """插入单条线索"""
-        import hashlib
-        url_hash = hashlib.md5(lead['url'].encode('utf-8')).hexdigest()
+        lead_url_hash = url_hash(lead['url'])
         conn = self._get_conn()
         cursor = conn.cursor()
         cursor.execute('''
@@ -99,7 +100,7 @@ class Database:
         ''', (
             lead.get('title', ''),
             lead.get('url', ''),
-            url_hash,
+            lead_url_hash,
             lead.get('summary', ''),
             lead.get('source_name', ''),
             lead.get('category', ''),
@@ -110,7 +111,7 @@ class Database:
             'new',
         ))
         conn.commit()
-        self.insert_url(url_hash, lead.get('url', ''))
+        self.insert_url(lead_url_hash, lead.get('url', ''))
 
     def insert_leads(self, leads: List[Dict]):
         """批量插入线索"""

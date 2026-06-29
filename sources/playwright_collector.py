@@ -8,39 +8,32 @@ import asyncio, hashlib, sqlite3, re, os, sys, json, random
 from datetime import datetime
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
+
+from core.utils import url_hash, has_keyword_match
+from core.classifier import Classifier
+
 PARENT = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(PARENT, 'leads.db')
+DB_PATH = os.path.join(os.path.dirname(PARENT), 'leads.db')
 
-CATEGORIES = [
-    ('工程类', ['工程', '施工', '建筑', '建设', '道路', '桥梁', '水利', '改造', '监理', '装修']),
-    ('车辆类', ['车辆', '交通', '运输', '客车', '货车', '公交车', '车队']),
-    ('责任险类', ['责任险', '安全生产', '食品安全', '雇主责任', '公众责任']),
-    ('政府项目类', ['采购', '招标', '中标', '成交', '磋商', '谈判', '遴选']),
-    ('农险类', ['农业', '种植', '养殖', '粮食', '水稻', '油菜', '森林', '农田']),
-    ('健康险类', ['医疗', '健康保险', '补充医疗', '大病保险', '意外伤害', '学平险']),
-    ('企业财产类', ['财产保险', '财产险', '厂房', '设备', '固定资产']),
-]
+# Use centralized classifier with default config
+_classifier = Classifier({})
 
-def classify(text):
-    for cat, kws in CATEGORIES:
-        if any(kw in text for kw in kws):
-            return cat
-    return '其他保险'
 
 def save_leads(leads):
     db = sqlite3.connect(DB_PATH)
     db.execute("PRAGMA journal_mode=WAL")
     new = 0
     for l in leads:
-        url_hash = hashlib.md5(l['url'].encode()).hexdigest()
-        if db.execute("SELECT id FROM leads WHERE url_hash=?", (url_hash,)).fetchone():
+        lead_hash = url_hash(l['url'])
+        if db.execute("SELECT id FROM leads WHERE url_hash=?", (lead_hash,)).fetchone():
             continue
-        cat = classify(l['title'] + l.get('summary', ''))
+        cat = _classifier.classify(l['title'], l.get('summary', ''))
         db.execute("""INSERT INTO leads 
             (title,url,url_hash,summary,source_name,category,publish_date,amount,status,created_at)
             VALUES (?,?,?,?,?,?,?,?,'new',datetime('now','localtime'))""",
-            (l['title'], l['url'], url_hash, l.get('summary',''),
+            (l['title'], l['url'], lead_hash, l.get('summary',''),
              l.get('source_name',''), cat, l.get('date',''), l.get('amount','')))
         new += 1
     db.commit(); db.close()
@@ -86,10 +79,10 @@ async def collect_all():
             }''')
             for item in items:
                 if any(kw in item['title'] for kw in ['招标','采购','公告','通知','保险','工程','项目']):
-                    url_hash = hashlib.md5(item['title'].encode()).hexdigest()[:8]
+                    title_hash = url_hash(item['title'])[:8]
                     all_leads.append({
                         'title': item['title'], 'date': item['date'],
-                        'url': f"https://www.bzsggzy.cn/#/notice/{url_hash}",
+                        'url': f"https://www.bzsggzy.cn/#/notice/{title_hash}",
                         'source_name': '巴中公共资源交易平台', 'summary': '',
                     })
         except Exception as e:

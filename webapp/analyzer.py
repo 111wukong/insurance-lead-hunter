@@ -2,9 +2,18 @@
 线索分析器 - 政府/企业分类 + 保险关联度 + 时效性检测
 """
 
+import os
 import re
+import sys
 from datetime import datetime, timedelta
 from typing import Tuple, Optional
+
+# Ensure project root is on path for shared imports
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from core.utils import has_keyword_match
 
 # 政府机构关键词
 GOV_KEYWORDS = [
@@ -43,10 +52,10 @@ INSURANCE_KEYWORDS_LOW = [
 def classify_project_type(title: str, summary: str = '') -> str:
     """分类：政府项目 / 企业项目 / 其他"""
     text = title + summary
-    
+
     gov_score = sum(1 for kw in GOV_KEYWORDS if kw in text)
     ent_score = sum(1 for kw in ENTERPRISE_KEYWORDS if kw in text)
-    
+
     if gov_score > ent_score:
         return '政府项目'
     elif ent_score > gov_score:
@@ -60,12 +69,12 @@ def classify_project_type(title: str, summary: str = '') -> str:
 def classify_insurance_relevance(title: str, summary: str = '') -> str:
     """保险关联度：高 / 中 / 低"""
     text = title + summary
-    
-    if any(kw in text for kw in INSURANCE_KEYWORDS_HIGH):
+
+    if has_keyword_match(text, INSURANCE_KEYWORDS_HIGH):
         return '高'
-    if any(kw in text for kw in INSURANCE_KEYWORDS_MEDIUM):
+    if has_keyword_match(text, INSURANCE_KEYWORDS_MEDIUM):
         return '中'
-    if any(kw in text for kw in INSURANCE_KEYWORDS_LOW):
+    if has_keyword_match(text, INSURANCE_KEYWORDS_LOW):
         return '低'
     return '低'
 
@@ -118,28 +127,25 @@ def analyze_lead(title: str, summary: str = '', date: str = '',
         'days_to_deadline': deadline_days,
     }
 
+# Opportunity mapping: keywords -> insurance reason
+_OPPORTUNITY_RULES = [
+    (['工程', '施工', '建设', '建筑', '道路', '桥梁'], '工程一切险/第三方责任险'),
+    (['车辆', '运输', '客车', '货车', '物流'], '车辆保险'),
+    (['采购', '设备', '物资', '材料', '货物'], '货物运输险'),
+    (['安全', '检测', '监测', '监理', '评估'], '安全生产责任险/职业责任险'),
+    (['物业', '保洁', '保安', '管理服务'], '公众责任险/雇主责任险'),
+    (['医疗', '健康', '医院', '卫生'], '医疗责任险/健康险'),
+    (['农业', '种植', '养殖', '粮食', '森林'], '农业保险'),
+    (['保险', '投保', '承保', '共保'], '直接保险采购需求'),
+    (['老旧', '改造', '修缮', '装修'], '建工一切险'),
+]
+
+
 def insurance_opportunity_reason(title: str, summary: str = '') -> str:
     """生成保险商机理由"""
-    reasons = []
     text = title + summary
-    
-    if any(kw in text for kw in ['工程', '施工', '建设', '建筑', '道路', '桥梁']):
-        reasons.append('工程一切险/第三方责任险')
-    if any(kw in text for kw in ['车辆', '运输', '客车', '货车', '物流']):
-        reasons.append('车辆保险')
-    if any(kw in text for kw in ['采购', '设备', '物资', '材料', '货物']):
-        reasons.append('货物运输险')
-    if any(kw in text for kw in ['安全', '检测', '监测', '监理', '评估']):
-        reasons.append('安全生产责任险/职业责任险')
-    if any(kw in text for kw in ['物业', '保洁', '保安', '管理服务']):
-        reasons.append('公众责任险/雇主责任险')
-    if any(kw in text for kw in ['医疗', '健康', '医院', '卫生']):
-        reasons.append('医疗责任险/健康险')
-    if any(kw in text for kw in ['农业', '种植', '养殖', '粮食', '森林']):
-        reasons.append('农业保险')
-    if any(kw in text for kw in ['保险', '投保', '承保', '共保']):
-        reasons.append('直接保险采购需求')
-    if any(kw in text for kw in ['老旧', '改造', '修缮', '装修']):
-        reasons.append('建工一切险')
-    
+    reasons = [
+        reason for keywords, reason in _OPPORTUNITY_RULES
+        if has_keyword_match(text, keywords)
+    ]
     return '、'.join(reasons) if reasons else '潜在保险需求'
