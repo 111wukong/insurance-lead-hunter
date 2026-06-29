@@ -171,6 +171,13 @@ tr.row-expired { opacity:.5; }
 
 <script>
 let currentPage=1, totalPages=1, searchTimer;
+// API token for authenticated requests (read from meta tag or set manually)
+const API_TOKEN = document.querySelector('meta[name="api-token"]')?.content || '';
+function authHeaders(extra={}) {
+  const h = {'Content-Type':'application/json', ...extra};
+  if(API_TOKEN) h['X-API-Token'] = API_TOKEN;
+  return h;
+}
 
 async function loadStats() {
   const res = await fetch('/api/stats'); const d = await res.json();
@@ -282,14 +289,14 @@ function closeDetail(){ document.getElementById('detail-overlay').classList.remo
 
 async function updateStatus(id,st){
   if(st==='delete'&&!confirm('确定删除？'))return;
-  await fetch('/api/leads/'+id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st})});
+  await fetch('/api/leads/'+id+'/status',{method:'POST',headers:authHeaders(),body:JSON.stringify({status:st})});
   showToast(st==='delete'?'已删除':'已更新','success'); closeDetail(); loadLeads(); loadStats();
 }
 
 async function collectLeads(){
   const btn=document.getElementById('btn-collect'); btn.disabled=true; btn.textContent='⏳ 采集中...';
   try{
-    const res=await fetch('/api/collect',{method:'POST'}); const d=await res.json();
+    const res=await fetch('/api/collect',{method:'POST',headers:authHeaders()}); const d=await res.json();
     showToast(d.ok?'采集完成！':('失败: '+(d.error||'')),d.ok?'success':'error');
     if(d.ok){loadStats();loadLeads(1);}
   }catch(e){showToast('请求失败','error');}
